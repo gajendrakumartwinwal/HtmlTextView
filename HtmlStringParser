@@ -1,0 +1,223 @@
+package com.toi.reader.htmlparser;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
+
+import android.content.Context;
+import android.content.Intent;
+import android.text.Html;
+import android.text.TextUtils;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.TextView;
+
+import com.library.controls.CrossFadeImageView;
+import com.toi.reader.activities.R;
+import com.toi.reader.constants.Constants;
+
+public class HtmlStringParser {
+
+	public static interface OnTagEncountered{
+		public View getView(String element);
+	}
+
+	enum Html_Tag {
+		video,image,iframe
+	}
+
+	public static ArrayList<View> getHtmlView(Context mContext, String inputText, OnTagEncountered listener, String...tags){
+		if(TextUtils.isEmpty(inputText))
+			return null;
+		LayoutInflater mInflater = (LayoutInflater)mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+
+		ArrayList<View> returnViews = new ArrayList<View>();
+		ArrayList<String> splitArray = getSplitStrings(inputText, mContext, tags);
+
+		if(splitArray.get(1) == null){
+			returnViews.add(getTextViewForString(mInflater, splitArray.get(0)));
+		}else{
+			//First Blog for Text 
+			returnViews.add(getTextViewForString(mInflater, splitArray.get(0)));
+
+			//Secong Blog for Html Tag
+			if(listener.getView(splitArray.get(1)) != null)
+				returnViews.add(listener.getView(splitArray.get(1)));
+
+			/*
+			if(splitArray.get(1).contains("<img"))
+				returnViews.add(getImageViewForString(mInflater, splitArray.get(1)));
+			else if(splitArray.get(1).contains("<video"))
+				returnViews.add(getVideoViewForString(mContext, mInflater, splitArray.get(1)));
+			else if(splitArray.get(1).contains("<iframe"))
+				returnViews.add(getIframeViewForString(mInflater, splitArray.get(1)));
+			 */
+			//Recursive Calls for Rest String
+			if(splitArray.get(2) != null)
+				returnViews.addAll(getHtmlView(mContext, splitArray.get(2), listener, tags));
+		}
+
+		return returnViews;
+	}
+
+	private static View getTextViewForString(LayoutInflater mInflater, String value){
+		View mViewReference =  mInflater.inflate(R.layout.story_html_text_view, null, false);
+		TextView mText = (TextView) mViewReference.findViewById(R.id.html_texview);
+		mText.setText(Html.fromHtml(value));
+		return mViewReference;
+	}
+
+
+	private static String getSrc(String value){
+
+		Document doc = Jsoup.parse(value);
+		Elements firstH1 = doc.getAllElements();
+		String srcValue = firstH1.get(firstH1.size()-1).attr("src");
+		return srcValue;
+		/*
+
+
+		int start = value.indexOf("src=\"");
+		int end = value.substring(start).indexOf("\"/>")+start;
+		return value.substring(start+5, end);*/
+	}
+
+	private static String getyoutubeId(String value){
+		int start = value.indexOf("?v=");
+		if(start == -1)
+			return value;
+		else
+			return value.substring(start+3);
+	}
+
+
+	public static ArrayList<String> getSplitStrings(String htmlString, Context mContext, String... tags){
+
+		//		String htmlString = loadJSONFromAsset(mContext);
+		ArrayList<String> splitItems = new ArrayList<String>();
+		TagPosition start;
+
+		TagPosition[] taggedPositionsArray = new TagPosition[tags.length];
+		for(int i=0; i<tags.length; i++){
+			taggedPositionsArray[i] = TagPosition(htmlString.indexOf("<"+tags[i]),"</"+tags[i]+">");
+		}
+
+		/*int startImg = htmlString.indexOf("<img");
+		int startvideo = htmlString.indexOf("<video");
+		int startIframe = htmlString.indexOf("<iframe");*/
+		start = getTagMin(taggedPositionsArray);//TagPosition(startImg, "</img>"), TagPosition(startvideo, "</video>"), TagPosition(startIframe, "</iframe>"));
+		if(start.getPosition() > 0){
+
+			int end;
+			if(htmlString.substring(start.getPosition()).indexOf(start.getValue()) != -1){
+				int endWithoutTag = htmlString.substring(start.getPosition()).indexOf(start.getValue())+start.getValue().length()+start.getPosition();
+
+				int endWithTag = htmlString.substring(start.getPosition()).indexOf("/>")+start.getPosition()+2;
+
+				end = getMin(endWithoutTag, endWithTag);
+			}else{
+				end = htmlString.substring(start.getPosition()).indexOf("/>")+start.getPosition()+2;
+			}
+
+			splitItems.add(htmlString.substring(0, start.getPosition()));
+			splitItems.add(htmlString.substring(start.getPosition(), end));
+			splitItems.add(htmlString.substring(end));
+		}else{
+			splitItems.add(htmlString);
+			splitItems.add(null);
+			splitItems.add(null);
+		}
+
+		/*switch (Html_Tag.video) {
+		case video:
+
+			break;
+		case image:
+
+			break;
+		case iframe:
+
+			break;
+		}*/
+		return splitItems;
+	}
+
+	private static class TagPosition{
+		public TagPosition(int position, String vlaue){
+			this.position = position;
+			this.value = vlaue;
+		}
+		private int position;
+		private String value;
+		public int getPosition() {
+			return position;
+		}
+		public void setPosition(int position) {
+			this.position = position;
+		}
+		public String getValue() {
+			return value;
+		}
+		public void setValue(String value) {
+			this.value = value;
+		}
+
+	}
+	private static int getMin(int... items){
+		int output = -1;
+		for(int i=0; i<items.length; i++){
+			if(items[i]>0){
+				if(output == -1){
+					output = items[i];
+				}
+				if(output > items[i]){
+					output = items[i];
+				}
+			}
+		}
+		return output;
+	}
+	private static TagPosition getTagMin(TagPosition... items){
+		TagPosition output = TagPosition(-1, null);
+		for(int i=0; i<items.length; i++){
+			if(items[i].getPosition()>0){
+				if(output.getPosition() == -1){
+					output.setPosition(items[i].getPosition());
+					output.setValue(items[i].getValue());
+				}
+				if(output.getPosition() > items[i].getPosition()){
+					output.setPosition(items[i].getPosition());
+					output.setValue(items[i].getValue());
+				}
+			}
+		}
+		return output;
+	}
+
+	private static TagPosition TagPosition(int i, String object) {
+		return new TagPosition(i, object);
+	}
+
+	public static String loadJSONFromAsset(Context mContext) {
+		String json = null;
+		try {
+			InputStream is = mContext.getAssets().open("foo.txt");
+			int size = is.available();
+			byte[] buffer = new byte[size];
+			is.read(buffer);
+			is.close();
+			json = new String(buffer, "UTF-8");
+
+			return json;
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			return null;
+		}
+	}
+}
