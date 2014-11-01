@@ -8,7 +8,7 @@ How to use:-
 You will be provided a list of Views in same order as appeared in string and you can use them wherever you want to use.
 
 
-ArrayList<View> htmlViews = new ArrayList<View>();
+	ArrayList<View> htmlViews = new ArrayList<View>();
 			htmlViews = HtmlStringParser.getHtmlView(context, Your Html String, new OnTagEncountered() {
 
 				@Override
